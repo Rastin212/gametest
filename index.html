@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <meta charset="UTF-8">
+    <title>Строитель Слов: Полная Версия</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #ui-header {
+            height: 60px;
+            background: #2c3e50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 100;
+        }
+
+        #score-board { 
+            font-size: 24px; 
+            font-weight: bold; 
+            display: flex;
+            gap: 30px;
+        }
+
+        .score-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .score-label { font-size: 12px; opacity: 0.9; }
+        .score-value { font-size: 20px; font-weight: bold; }
+        .legendary { color: #e74c3c; }
+        .epic { color: #9b59b6; }
+
+        .btn {
+            background: #34495e;
+            color: white;
+            border: 1px solid #7f8c8d;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-left: 10px;
+            border-radius: 4px;
+        }
+        .btn:hover { background: #4e667e; }
+
+        #game-container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 60px);
+        }
+
+        #hint-area {
+            flex: 1;
+            background: #ecf0f1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-right: 2px solid #bdc3c7;
+            text-align: center;
+        }
+        
+        #hint-title {
+            color: #7f8c8d;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #hint-text {
+            font-size: 28px;
+            color: #2c3e50;
+            font-weight: bold;
+            line-height: 1.4;
+        }
+
+        #word-area {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: white;
+        }
+
+        #current-word {
+            font-size: 80px;
+            font-weight: bold;
+            letter-spacing: 10px;
+            color: #333;
+            transition: transform 0.2s;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+        }
+
+        .missing-char {
+            color: #e74c3c;
+            border-bottom: 5px solid #e74c3c;
+            display: inline-block;
+            min-width: 50px;
+            text-align: center;
+            margin: 0 5px;
+        }
+
+        .epic-char {
+            color: #9b59b6;
+            border-bottom: 5px solid #9b59b6;
+            background: rgba(155, 89, 182, 0.1);
+            border-radius: 5px;
+            padding: 2px 5px;
+        }
+
+        .shake { animation: shake 0.5s; }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            50% { transform: translateX(10px); }
+            75% { transform: translateX(-10px); }
+            100% { transform: translateX(0); }
+        }
+
+        #skyscraper-area {
+            flex: 1;
+            background: #dcdde1;
+            border-left: 2px solid #bdc3c7;
+            padding: 20px;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            overflow-y: auto;
+            justify-content: flex-start;
+        }
+
+        .brick {
+            width: 80%;
+            padding: 15px;
+            margin-top: 5px;
+            background: #3498db;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            border-radius: 4px;
+            border: 2px solid #2980b9;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease-out;
+            flex-shrink: 0;
+        }
+
+        .brick-legendary {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            border-color: #c0392b;
+            color: white;
+            font-size: 20px;
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+
+        .brick-epic {
+            background: linear-gradient(45deg, #9b59b6, #8e44ad);
+            border-color: #8e44ad;
+            color: white;
+            font-size: 22px;
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(155, 89, 182, 0.5);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(44, 62, 80, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            color: white;
+        }
+        .hidden { display: none !important; }
+        h1 { font-size: 48px; color: #f1c40f; margin-bottom: 20px; }
+        p { font-size: 22px; max-width: 700px; text-align: center; margin-bottom: 40px; line-height: 1.6; }
+        .big-btn {
+            padding: 15px 50px;
+            font-size: 28px;
+            background: #f1c40f;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #2c3e50;
+            font-weight: bold;
+            transition: transform 0.1s;
+        }
+        .big-btn:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <div id="ui-header">
+        <div id="score-board">
+            <div class="score-item">
+                <div class="score-label">Обычные</div>
+                <div class="score-value" id="simple-score">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">Легендарные</div>
+                <div class="score-value legendary" id="legendary-score">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">Эпичные</div>
+                <div class="score-value epic" id="epic-score">0</div>
+            </div>
+        </div>
+        <div>
+            <button class="btn" onclick="game.showMenu()">Меню</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div id="hint-area">
+            <div id="hint-title">Подсказка</div>
+            <div id="hint-text">...</div>
+        </div>
+        <div id="word-area">
+            <div id="current-word"></div>
+            <div style="margin-top: 30px; color: #7f8c8d; font-size: 20px;">
+                <span id="input-hint">Нажми нужную букву на клавиатуре</span>
+            </div>
+        </div>
+        <div id="skyscraper-area"></div>
+    </div>
+
+    <div id="menu-overlay" class="overlay">
+        <h1>СТРОИТЕЛЬ СЛОВ: ЛЕГЕНДЫ</h1>
+        <p>
+            🟤 1 пропуск = Обычное (10 очков)<br>
+            🔴 1 пропуск = Легендарное (20 очков)<br>
+            🟣 2 пропуска = Эпичное (30 очков)<br>
+            Строи самый высокий небоскреб из слов!
+        </p>
+        <button class="big-btn" onclick="game.startNewGame()">Начать стройку</button>
+    </div>
+	
+<script>
+    const dictionary = [
+        // ПРОСТЫЕ СЛОВА
+        { w: "КОТ", h: "Мурлычет", t: "simple" }, 
+        { w: "ДОМ", h: "Жилище", t: "simple" }, 
+        { w: "ЛЕС", h: "Деревья", t: "simple" }, 
+        { w: "МЯЧ", h: "Игра", t: "simple" }, 
+        { w: "СУП", h: "Обед", t: "simple" }, 
+        { w: "ШАР", h: "Воздух", t: "simple" }, 
+        { w: "НОС", h: "Дышим", t: "simple" }, 
+        { w: "РОТ", h: "Едим", t: "simple" }, 
+        { w: "СНЕГ", h: "Зима", t: "simple" }, 
+        { w: "СТУЛ", h: "Сидим", t: "simple" },
+        { w: "СТОЛ", h: "Едим", t: "simple" }, 
+        { w: "КРОВАТЬ", h: "Спим", t: "simple" }, 
+        { w: "ЛАМПА", h: "Свет", t: "simple" }, 
+        { w: "ЧАСЫ", h: "Время", t: "simple" }, 
+        { w: "КНИГА", h: "Читаем", t: "simple" }, 
+        { w: "РУЧКА", h: "Пишем", t: "simple" }, 
+        { w: "КАРТА", h: "Ищем сокровища", t: "simple" }, 
+        { w: "ЯБЛОКО", h: "Фрукт", t: "simple" }, 
+        { w: "ХЛЕБ", h: "Еда", t: "simple" }, 
+        { w: "МОЛОКО", h: "Напиток", t: "simple" },
+        { w: "ВОДА", h: "Пьем", t: "simple" }, 
+        { w: "СОЛНЦЕ", h: "Светит", t: "simple" }, 
+        { w: "НЕБО", h: "Голубое", t: "simple" }, 
+        { w: "ДОЖДЬ", h: "Мокро", t: "simple" }, 
+        { w: "ВЕТЕР", h: "Дует", t: "simple" }, 
+        { w: "ОГОНЬ", h: "Горит", t: "simple" },
+        { w: "ДЕРЕВО", h: "Высокое", t: "simple" }, 
+        { w: "ТРАВА", h: "Зеленая", t: "simple" }, 
+        { w: "ЦВЕТ", h: "Красиво", t: "simple" }, 
+        { w: "РЕКА", h: "Течет", t: "simple" }, 
+        { w: "ОЗЕРО", h: "Спокойное и с водой", t: "simple" }, 
+        { w: "ГОРА", h: "Высокая из камня", t: "simple" },
+        { w: "ПЕС", h: "Лает", t: "simple" }, 
+        { w: "КОЗА", h: "С рогами и дает молоко", t: "simple" }, 
+        { w: "ОВЦА", h: "Дает много шерсти", t: "simple" }, 
+        { w: "КУРИЦА", h: "Кудахчет", t: "simple" }, 
+        { w: "УТКА", h: "Крякает", t: "simple" }, 
+        { w: "ГУСЬ", h: "Крякает", t: "simple" },
+        { w: "МАМА", h: "Из твоей семьи", t: "simple" }, 
+        { w: "ПАПА", h: "Из твоей семьи", t: "simple" }, 
+        { w: "БРАТ", h: "Из твоей семьи", t: "simple" }, 
+        { w: "СЕСТРА", h: "Из твоей семьи", t: "simple" }, 
+        { w: "ДРУГ", h: "Вместе, самый лучший", t: "simple" }, 
+        { w: "ШКОЛА", h: "Учимся", t: "simple" },
+        { w: "УРОК", h: "Знания", t: "simple" }, 
+        { w: "ДОСКА", h: "Пишем", t: "simple" }, 
+        { w: "ПАРТА", h: "Сидим", t: "simple" }, 
+        { w: "ТЕТРАДЬ", h: "Пишем", t: "simple" }, 
+        { w: "МЕШОК", h: "Для сменки", t: "simple" }, 
+        { w: "ИГРУШКА", h: "Играем", t: "simple" }, 
+        { w: "КУКЛА", h: "Девочки играют", t: "simple" }, 
+        { w: "МАШИНКА", h: "Мальчики играют", t: "simple" },
+
+        // ЛЕГЕНДАРНЫЕ СЛОВА
+        { w: "СЛОН", h: "Огромный", t: "legendary" }, 
+        { w: "ТИГР", h: "Полосатый", t: "legendary" }, 
+        { w: "МЕДВЕДЬ", h: "Лесной хозяин", t: "legendary" }, 
+        { w: "ЖИРАФ", h: "Длинная шея", t: "legendary" }, 
+        { w: "ЛЕВ", h: "Царь зверей", t: "legendary" }, 
+        { w: "ВОЛК", h: "Серый хищник", t: "legendary" }, 
+        { w: "ЛИСА", h: "Хитрая", t: "legendary" }, 
+        { w: "ЗАЯЦ", h: "Прыгает", t: "legendary" },
+        { w: "ЕНОТ", h: "Маска на мордашке и хитрый", t: "legendary" }, 
+        { w: "ОБЕЗЬЯНА", h: "Любит бананы", t: "legendary" },
+        { w: "ПИНГВИН", h: "Ходит прямо", t: "legendary" }, 
+        { w: "ДЕЛЬФИН", h: "Умный", t: "legendary" }, 
+        { w: "КИТ", h: "Огромный в океане", t: "legendary" }, 
+        { w: "АКУЛА", h: "Страшная рыба", t: "legendary" }, 
+        { w: "КРОКОДИЛ", h: "Зубастый и зеленый", t: "legendary" }, 
+        { w: "ПОПУГАЙ", h: "Говорит и птица", t: "legendary" },
+        { w: "СОБАКА", h: "Верный друг", t: "legendary" }, 
+        { w: "КОШКА", h: "Мурлычет", t: "legendary" }, 
+        { w: "ЛОШАДЬ", h: "Скачет", t: "legendary" }, 
+        { w: "КОРОВА", h: "Му-му", t: "legendary" },
+        { w: "СВИНЬЯ", h: "Хрю-хрю", t: "legendary" }, 
+        { w: "КУРИЦА", h: "Кудахчет", t: "legendary" }, 
+        { w: "ГРОМ", h: "Громко в грозу", t: "legendary" }, 
+        { w: "МОЛНИЯ", h: "Сияет в грозу", t: "legendary" }, 
+        { w: "РАДУГА", h: "Семь цветов", t: "legendary" }, 
+        { w: "ЗВЕЗДА", h: "Светит ночью", t: "legendary" },
+        { w: "ЛУНА", h: "Ночью светит", t: "legendary" }, 
+        { w: "СОЛНЦЕ", h: "Днем светит", t: "legendary" }, 
+        { w: "ОБЛАКО", h: "Плывут", t: "legendary" }, 
+        { w: "ТУЧА", h: "Дождь", t: "legendary" }, 
+        { w: "МЕЧТА", h: "Хочу", t: "legendary" }, 
+        { w: "СЧАСТЬЕ", h: "Улыбка", t: "legendary" },
+        { w: "ДРУЖБА", h: "Навсегда", t: "legendary" }, 
+        { w: "СЕМЬЯ", h: "Любовь", t: "legendary" }, 
+        { w: "БАБУШКА", h: "Пирожки", t: "legendary" }, 
+        { w: "ДЕДУШКА", h: "Сказки", t: "legendary" }, 
+        { w: "ПОБЕДА", h: "Ура!", t: "legendary" }, 
+        { w: "ЧЕМПИОН", h: "Первый", t: "legendary" }, 
+        { w: "ГЕРОЙ", h: "Спасает", t: "legendary" }, 
+        { w: "ПРИНЦ", h: "Королевский", t: "legendary" },
+
+        // ЭПИЧНЫЕ СЛОВА (2 пропуска)
+        { w: "ЛЕТЧИК", h: "Самолет водит", missingChars: ['е','ч'], missingPositions: [1,3] },
+        { w: "КОСМОНАВТ", h: "К звездам", missingChars: ['с','о'], missingPositions: [2,4] },
+        { w: "ПОЧТАЛЬОН", h: "Письма носит", missingChars: ['ч','л'], missingPositions: [2,5] },
+        { w: "СТРОИТЕЛЬ", h: "Дома строит", missingChars: ['т','о'], missingPositions: [1,3] },
+        { w: "ВОДИТЕЛЬ", h: "Машины водит", missingChars: ['о','и'], missingPositions: [1,3] },
+        { w: "УЧИТЕЛЬ", h: "В школе учит", missingChars: ['ч','т'], missingPositions: [1,3] },
+        { w: "ВОЛШЕБНИК", h: "Чудеса делает", missingChars: ['о','ш'], missingPositions: [1,3] },
+        { w: "ПРОФЕССОР", h: "Ученый в лаборатории", missingChars: ['р','ф'], missingPositions: [1,3] },
+        { w: "ПРЕЗИДЕНТ", h: "Главный в стране", missingChars: ['р','з'], missingPositions: [1,3] },
+        { w: "ПРИНЦЕССА", h: "В замке живет", missingChars: ['р','н'], missingPositions: [1,3] },
+        { w: "ДЕНЬРОЖДЕНИЕ", h: "День для еды тортиков", missingChars: ['н','р'], missingPositions: [2,4] },
+        { w: "КАНИКУЛЫ", h: "Отдых летом", missingChars: ['н','л'], missingPositions: [2,6] },
+        { w: "ЗООПАРК", h: "Животные в городе", missingChars: ['о','а'], missingPositions: [1,4] },
+        { w: "КОНСТРУКТОР", h: "Собираем", missingChars: ['н','р'], missingPositions: [2,5] },
+        { w: "ПЛАНЕТА", h: "Земля наша...", missingChars: ['л','н'], missingPositions: [1,3] },
+        { w: "ГАЛАКТИКА", h: "Звезды в космосе", missingChars: ['а','к'], missingPositions: [1,4] },
+        { w: "ТЕЛЕФОН", h: "Звоним", missingChars: ['е','о'], missingPositions: [1,5] },
+        { w: "КОМПЬЮТЕР", h: "Программируем на нем", missingChars: ['м','ь'], missingPositions: [2,4] },
+        { w: "МУЛЬТИКИ", h: "Смешные смотрим", missingChars: ['л','т'], missingPositions: [2,4] },
+        { w: "ПРИКЛЮЧЕНИЕ", h: "Поиск клада", missingChars: ['к','ч'], missingPositions: [3,6] },
+        { w: "ОТКРЫТИЕ", h: "Новое в науке", missingChars: ['т','т'], missingPositions: [1,5] },
+        { w: "ИЗОБРЕТЕНИЕ", h: "Новое устройство", missingChars: ['з','р'], missingPositions: [1,4] },
+        { w: "ПОЛИЦЕЙСКАЯ", h: "Защищает людей", missingChars: ['ц','с'], missingPositions: [4,7] },
+        { w: "ПОЖАРНЫЙ", h: "Гасит огонь", missingChars: ['а','н'], missingPositions: [3,5] },
+        { w: "СПАСАТЕЛЬ", h: "Спасает людей", missingChars: ['а','т'], missingPositions: [2,5] },
+        { w: "ИСКЛЮЧЕНИЕ", h: "Отличается от правил", missingChars: ['к','ч'], missingPositions: [2,5] },
+        { w: "ПРОГРАММИСТ", h: "Программы пишет", missingChars: ['р','м'], missingPositions: [1,6] },
+        { w: "МАТЕМАТИКА", h: "Наука о числах", missingChars: ['т','м'], missingPositions: [2,4] },
+        { w: "ФИЗКУЛЬТУРА", h: "Урок где бегаем", missingChars: ['з','л'], missingPositions: [2,5] },
+        { w: "РИСОВАНИЕ", h: "Урок где рисуем", missingChars: ['с','н'], missingPositions: [2,6] },
+        { w: "МУЗЫКА", h: "Песни", missingChars: ['з','к'], missingPositions: [2,4] },
+        { w: "ТАНЦЫ", h: "Двигаемся", missingChars: ['н','ц'], missingPositions: [1,3] },
+        { w: "СПОРТ", h: "Соревнования", missingChars: ['п','р'], missingPositions: [1,3] },
+        { w: "ЧЕМПИОН", h: "Победитель", missingChars: ['е','п'], missingPositions: [1,3] },
+        { w: "ТРЕНИРОВКА", h: "Спортивные упражнения", missingChars: ['е','в'], missingPositions: [2,7] },
+        { w: "СТАДИОН", h: "Поле для спорта", missingChars: ['т','д'], missingPositions: [1,3] }
+    ];
+
+    class Game {
+        constructor() {
+            this.simpleCount = 0;
+            this.legendaryCount = 0;
+            this.epicCount = 0;
+            this.currentTask = null;
+            this.isRunning = false;
+            this.epicCharIndex = 0;
+
+            this.inputHintEl = document.getElementById('input-hint');
+            this.hintEl = document.getElementById('hint-text');
+            this.wordEl = document.getElementById('current-word');
+            this.simpleScoreEl = document.getElementById('simple-score');
+            this.legendaryScoreEl = document.getElementById('legendary-score');
+            this.epicScoreEl = document.getElementById('epic-score');
+            this.skyscraperEl = document.getElementById('skyscraper-area');
+            this.menuOverlay = document.getElementById('menu-overlay');
+
+            document.addEventListener('keydown', (e) => this.handleInput(e));
+        }
+
+        startNewGame() {
+            this.simpleCount = 0;
+            this.legendaryCount = 0;
+            this.epicCount = 0;
+            this.updateScores();
+            this.skyscraperEl.innerHTML = '';
+            this.isRunning = true;
+            this.menuOverlay.classList.add('hidden');
+            this.nextWord();
+        }
+
+        showMenu() {
+            this.isRunning = false;
+            this.menuOverlay.classList.remove('hidden');
+        }
+
+        nextWord() {
+            const item = dictionary[Math.floor(Math.random() * dictionary.length)];
+            this.epicCharIndex = 0;
+
+            if (item.missingChars) {
+                this.currentTask = {
+                    fullWord: item.w,
+                    hint: item.h,
+                    type: "epic",
+                    missingChars: item.missingChars,
+                    missingPositions: item.missingPositions
+                };
+            } else {
+                const index = Math.floor(Math.random() * item.w.length);
+                this.currentTask = {
+                    fullWord: item.w,
+                    hint: item.h,
+                    type: item.t,
+                    missingChar: item.w[index].toLowerCase(),
+                    missingIndex: index
+                };
+            }
+
+            this.renderTask();
+        }
+
+        renderTask() {
+            this.hintEl.innerText = this.currentTask.hint;
+            this.wordEl.classList.remove('shake');
+
+            if (this.currentTask.type === "epic" && this.currentTask.missingChars) {
+                const idx0 = this.currentTask.missingPositions[0];
+                const idx1 = this.currentTask.missingPositions[1];
+                let displayWord = "";
+
+                for (let i = 0; i < this.currentTask.fullWord.length; i++) {
+                    if (i === idx0) {
+                        if (this.epicCharIndex > 0) {
+                            displayWord += `<span class="missing-char epic-char">${this.currentTask.missingChars[0].toUpperCase()}</span>`;
+                        } else {
+                            displayWord += `<span class="missing-char epic-char">_</span>`;
+                        }
+                    } else if (i === idx1) {
+                        displayWord += `<span class="missing-char epic-char">_</span>`;
+                    } else {
+                        displayWord += this.currentTask.fullWord[i];
+                    }
+                }
+
+                this.wordEl.innerHTML = displayWord;
+                this.inputHintEl.innerText = `Введи ${this.epicCharIndex + 1}-ю букву`;
+            } else {
+                const prefix = this.currentTask.fullWord.substring(0, this.currentTask.missingIndex);
+                const suffix = this.currentTask.fullWord.substring(this.currentTask.missingIndex + 1);
+                this.wordEl.innerHTML = `${prefix}<span class="missing-char">_</span>${suffix}`;
+                this.inputHintEl.innerText = "Нажми нужную букву на клавиатуре";
+            }
+        }
+
+        handleInput(e) {
+            if (!this.isRunning) return;
+            const key = e.key.toLowerCase();
+            if (!/[а-яё]/.test(key)) return;
+
+            let correct = false;
+
+            if (this.currentTask.type === "epic" && this.currentTask.missingChars) {
+                const expectedChar = this.currentTask.missingChars[this.epicCharIndex];
+                if (key === expectedChar) {
+                    correct = true;
+                    this.epicCharIndex++;
+                    if (this.epicCharIndex === 1) {
+                        this.renderTask();
+                    } else {
+                        this.epicSuccess();
+                    }
+                }
+            } else {
+                if (key === this.currentTask.missingChar) {
+                    correct = true;
+                    this.success();
+                }
+            }
+
+            if (!correct) {
+                this.fail();
+            }
+        }
+
+        epicSuccess() {
+            this.wordEl.innerHTML = this.currentTask.fullWord;
+            this.wordEl.style.color = "#9b59b6";
+            this.epicCount++;
+            this.updateScores();
+            this.addBrick(this.currentTask.fullWord, "epic");
+            setTimeout(() => {
+                this.wordEl.style.color = "#333";
+                this.nextWord();
+            }, 1200);
+        }
+
+        success() {
+            this.wordEl.innerHTML = this.wordEl.textContent.replace('_', this.currentTask.missingChar.toUpperCase());
+            this.wordEl.style.color = this.currentTask.type === "legendary" ? "#e74c3c" : "#27ae60";
+
+            if (this.currentTask.type === "simple") {
+                this.simpleCount++;
+            } else if (this.currentTask.type === "legendary") {
+                this.legendaryCount++;
+            }
+
+            this.updateScores();
+            this.addBrick(this.currentTask.fullWord, this.currentTask.type);
+            setTimeout(() => {
+                this.wordEl.style.color = "#333";
+                this.nextWord();
+            }, 800);
+        }
+
+        fail() {
+            this.wordEl.classList.add('shake');
+            setTimeout(() => this.wordEl.classList.remove('shake'), 500);
+        }
+
+        updateScores() {
+            this.simpleScoreEl.innerText = this.simpleCount;
+            this.legendaryScoreEl.innerText = this.legendaryCount;
+            this.epicScoreEl.innerText = this.epicCount;
+        }
+
+        addBrick(wordText, type) {
+            const brick = document.createElement('div');
+            brick.className = `brick ${type === 'legendary' ? 'brick-legendary' : type === 'epic' ? 'brick-epic' : ''}`;
+            brick.innerText = wordText;
+            this.skyscraperEl.appendChild(brick);
+            this.skyscraperEl.scrollTop = this.skyscraperEl.scrollHeight;
+        }
+    }
+
+    const game = new Game();
+</script>
+
+<script>
+    // Инициализация
+    let tg = window.Telegram.WebApp;
+    tg.expand(); // Расширить на весь экран
+
+</script>
+
+
+</body>
+</html>
