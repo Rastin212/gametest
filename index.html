@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            background: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            font-family: -apple-system, sans-serif;
+        }
+        .nft-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); 
+            gap: 15px; 
+        }
+        .nft-card { 
+            border: 1px solid var(--tg-theme-hint-color); 
+            border-radius: 12px; 
+            padding: 10px; 
+            text-align: center; 
+        }
+        .nft-image { 
+            width: 100%; 
+            height: 120px; 
+            object-fit: cover; 
+            border-radius: 8px; 
+        }
+        .wallet-input {
+            width: 100%; margin: 10px 0; padding: 12px;
+            border: 1px solid var(--tg-theme-hint-color);
+            border-radius: 8px; background: var(--tg-theme-secondary-bg-color);
+            color: var(--tg-theme-text-color);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Мои NFT</h1>
+    <input type="text" id="wallet-input" class="wallet-input" placeholder="Вставьте адрес TON кошелька (EQ... или UQ...)">
+    <button onclick="loadNFTs()" style="width: 100%; padding: 12px; margin: 10px 0; background: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); border: none; border-radius: 8px; font-weight: bold;">🔍 Загрузить NFT</button>
+    <div id="nft-grid" class="nft-grid">
+        <p>Введите адрес кошелька и нажмите кнопку</p>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Тестовые NFT для демонстрации (замените на реальные данные)
+        const testNFTs = [
+            { name: "Космический Кот #123", image: "https://via.placeholder.com/150x120/2cab37/ffffff?text=🐱NFT", address: "EQ..." },
+            { name: "Золотой Панда #456", image: "https://via.placeholder.com/150x120/0088cc/ffffff?text=🐼NFT", address: "UQ..." },
+            { name: "Редкий Дракон #789", image: "https://via.placeholder.com/150x120/ff6b35/ffffff?text=🐲NFT", address: "EQ..." }
+        ];
+
+        async function loadNFTs() {
+            const walletInput = document.getElementById('wallet-input');
+            const walletAddress = walletInput.value.trim();
+            const grid = document.getElementById('nft-grid');
+            
+            if (!walletAddress) {
+                grid.innerHTML = '<p style="color: var(--tg-theme-hint-color);">⚠️ Введите адрес кошелька</p>';
+                return;
+            }
+            
+            // Проверка формата TON адреса (начинается с EQ/UQ)
+            if (!walletAddress.match(/^EQ[A-Za-z0-9_-]{44,}$/) && !walletAddress.match(/^UQ[A-Za-z0-9_-]{44,}$/)) {
+                grid.innerHTML = '<p style="color: #ff6b35;">❌ Неверный формат адреса TON</p><p style="font-size: 12px; opacity: 0.7;">Должен начинаться с EQ... или UQ...</p>';
+                return;
+            }
+
+            grid.innerHTML = '<p>🔄 Загрузка NFT из кошелька...</p>';
+
+            try {
+                // Пока показываем демо + пытаемся загрузить реальные
+                showDemoNFTs(walletAddress);
+                
+                // Реальный API (работает через прокси для обхода CORS)
+                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(`https://tonapi.io/v2/accounts/${walletAddress}/jettons`);
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                
+                console.log('TON API ответ:', data);
+            } catch (error) {
+                console.error('API ошибка:', error);
+                // Оставляем демо-NFT, если API не работает
+            }
+        }
+
+        function showDemoNFTs(wallet) {
+            const grid = document.getElementById('nft-grid');
+            grid.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--tg-theme-hint-color);">
+                    <p>📱 Демо NFT кошелька:</p>
+                    <p style="font-size: 12px; opacity: 0.7;">${wallet.slice(0,8)}... (${wallet.slice(-4)})</p>
+                </div>
+            `;
+            
+            testNFTs.forEach((nft, index) => {
+                const card = document.createElement('div');
+                card.className = 'nft-card';
+                card.innerHTML = `
+                    <img class="nft-image" src="${nft.image}" alt="${nft.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div style="display: none; width: 100%; height: 120px; background: linear-gradient(45deg, #2cab37, #0088cc); border-radius: 8px; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                        NFT #${index + 1}
+                    </div>
+                    <div style="font-size: 14px; margin-top: 8px;">${nft.name}</div>
+                    <div style="font-size: 12px; opacity: 0.7;">${nft.address}</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Автозагрузка при открытии (покажет демо)
+        setTimeout(() => document.getElementById('wallet-input').focus(), 500);
+    </script>
+</body>
+</html>
