@@ -13,13 +13,14 @@
         .status { padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; font-size: 14px; }
         .success { background: rgba(44, 171, 55, 0.1); color: #2cab37; }
         .error { background: rgba(255, 107, 53, 0.1); color: #ff6b35; }
+        .sale-tag { background: #ff6b35; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-top: 4px; }
     </style>
 </head>
 <body>
-    <h1>🎨 Мои NFT (v2)</h1>
+    <h1>🎨 Мои NFT + GetGems</h1>
     
     <input type="text" id="wallet-input" class="wallet-input" placeholder="EQ... или UQ... (TON кошелёк)">
-    <button onclick="loadNFTs()">🔍 Найти ВСЕ NFT</button>
+    <button onclick="loadNFTs()">🔍 Все NFT (вкл. GetGems)</button>
     
     <div id="status" class="status"></div>
     <div id="nft-grid" class="nft-grid">
@@ -31,14 +32,13 @@
         tg.expand();
 
         async function loadNFTs() {
-            const walletInput = document.getElementById('wallet-input');
-            const walletAddress = walletInput.value.trim();
+            const walletAddress = document.getElementById('wallet-input').value.trim();
             const grid = document.getElementById('nft-grid');
             const status = document.getElementById('status');
             
             status.className = 'status';
             status.innerHTML = '';
-            grid.innerHTML = '<div class="loading">🔍 Сканируем блокчейн...</div>';
+            grid.innerHTML = '<div class="loading">🔍 Сканируем GetGems + кошельки...</div>';
 
             if (!walletAddress.match(/^EQ[A-Za-z0-9_-]{44,}$/) && !walletAddress.match(/^UQ[A-Za-z0-9_-]{44,}$/)) {
                 status.className = 'status error';
@@ -46,41 +46,45 @@
                 return;
             }
 
-            // 🆕 5 API + пагинация для ПОЛНОГО списка
-            const apis = [
-                { name: 'TonAPI', url: `https://tonapi.io/v2/accounts/${walletAddress}/nfts?limit=100&offset=0` },
-                { name: 'TonAPI2', url: `https://tonapi.io/v2/accounts/${walletAddress}/nfts?limit=100&offset=100` },
-                { name: 'TonCenter', url: `https://toncenter.com/api/v3/nft/ownership?owner=${walletAddress}&limit=100` },
-                { name: 'GetGems', url: `https://api.getgems.io/v1/nft/search/?owner=${walletAddress}&limit=100` },
-                { name: 'TonScan', url: `https://tonscan.org/api/v2/accounts/${walletAddress}/nfts?limit=100` }
-            ];
-
             let allNFTs = [];
 
-            // Собираем NFT из ВСЕХ источников
-            for (let api of apis) {
-                try {
-                    status.innerHTML = `📡 ${api.name}...`;
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(api.url)}`;
-                    const response = await fetch(proxyUrl);
-                    const proxyData = await response.json();
-                    const data = JSON.parse(proxyData.contents);
+            // 1. GetGems NFT на продаже (ГЛАВНЫЙ)
+            try {
+                status.innerHTML = '🛒 GetGems Marketplace...';
+                const getgemsUrl = `https://api.getgems.io/v1/nft/search/?owner=${walletAddress}&limit=100&includeSales=true`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(getgemsUrl)}`;
+                const response = await fetch(proxyUrl);
+                const proxyData = await response.json();
+                const data = JSON.parse(proxyData.contents);
+                
+                let getgemsNFTs = data.result || data.nfts || data.items || [];
+                allNFTs = allNFTs.concat(getgemsNFTs.map(nft => ({...nft, source: 'GetGems', sale: true})));
+                status.innerHTML += ` +${getgemsNFTs.length} на продаже`;
+            } catch(e) {
+                console.log('GetGems API недоступен');
+            }
 
-                    let nfts = data.nfts || data.result || data.items || data.nft_items || [];
-                    allNFTs = allNFTs.concat(nfts);
-                    
-                    status.innerHTML += ` +${nfts.length}`;
-                } catch (e) {
-                    console.log(`${api.name} skip`);
-                }
+            // 2. Обычные NFT кошелька
+            try {
+                status.innerHTML += ' + кошельки...';
+                const tonapiUrl = `https://tonapi.io/v2/accounts/${walletAddress}/nfts?limit=100`;
+                const proxyUrl2 = `https://api.allorigins.win/get?url=${encodeURIComponent(tonapiUrl)}`;
+                const response2 = await fetch(proxyUrl2);
+                const proxyData2 = await response2.json();
+                const data2 = JSON.parse(proxyData2.contents);
+                
+                let walletNFTs = data2.nfts || [];
+                allNFTs = allNFTs.concat(walletNFTs.map(nft => ({...nft, source: 'Кошелёк', sale: false})));
+            } catch(e) {
+                console.log('TonAPI недоступен');
             }
 
             // Удаляем дубликаты
-            allNFTs = allNFTs.filter((nft, index, self) => 
-                index === self.findIndex(t => t.address === nft.address)
+            allNFTs = allNFTs.filter((nft, i, arr) => 
+                i === arr.findIndex(t => t.address === nft.address)
             );
 
-            status.innerHTML = `✅ Найдено ${allNFTs.length} уникальных NFT`;
+            status.innerHTML = `✅ Всего: ${allNFTs.length} NFT (${allNFTs.filter(n=>n.sale).length} на GetGems)`;
             status.className = 'status success';
 
             if (allNFTs.length > 0) {
@@ -93,31 +97,25 @@
                     const image = nft.metadata?.image || 
                                  nft.metadata?.content?.image || 
                                  nft.image || 
-                                 nft.content?.image ||
-                                 `https://via.placeholder.com/150x120/2cab37/ffffff?text=#${i+1}`;
+                                 `https://via.placeholder.com/150x120/2cab37/ffffff?text=${i+1}`;
                     
                     card.innerHTML = `
                         <img class="nft-image" src="${image}" alt="${name}" 
-                             onerror="this.src='https://via.placeholder.com/150x120/2cab37/ffffff?text=#${i+1}'">
-                        <div style="font-size: 13px; margin-top: 6px; line-height: 1.3;">${name}</div>
-                        <div style="font-size: 11px; opacity: 0.7;">${nft.address ? nft.address.slice(0,8)+'...' : '—'}</div>
+                             onerror="this.src='https://via.placeholder.com/150x120/2cab37/ffffff?text=${i+1}'">
+                        <div style="font-size: 13px; margin-top: 6px;">${name}</div>
+                        ${nft.sale ? '<div class="sale-tag">🛒 НА ПРОДАЖЕ</div>' : ''}
+                        <div style="font-size: 11px; opacity: 0.7;">${nft.address?.slice(0,8)}...</div>
                     `;
                     grid.appendChild(card);
                 });
             } else {
-                grid.innerHTML = `
-                    <div class="loading">
-                        <p>📭 NFT не найдены</p>
-                        <p style="font-size: 12px;">${walletAddress.slice(0,12)}...${walletAddress.slice(-4)}</p>
-                    </div>
-                `;
+                grid.innerHTML = '<div class="loading">📭 NFT не найдены</div>';
             }
         }
 
-        // Главная кнопка Telegram
         setTimeout(() => {
             document.getElementById('wallet-input').focus();
-            tg.MainButton.setText('🔍 Найти NFT').show().onClick(loadNFTs);
+            tg.MainButton.setText('🔍 Сканировать').show().onClick(loadNFTs);
         }, 500);
     </script>
 </body>
