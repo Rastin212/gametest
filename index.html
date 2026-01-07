@@ -7,20 +7,20 @@
         .nft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; }
         .nft-card { border: 1px solid var(--tg-theme-hint-color); border-radius: 12px; padding: 10px; text-align: center; background: var(--tg-theme-secondary-bg-color); }
         .nft-image { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: var(--tg-theme-hint-color); }
-        .wallet-input { width: 100%; margin: 10px 0; padding: 12px; border: 1px solid var(--tg-theme-hint-color); border-radius: 8px; background: var(--tg-theme-secondary-bg-color); color: var(--tg-theme-text-color); box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin: 10px 0; background: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); border: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
+        .wallet-input { width: 100%; margin: 10px 0; padding: 12px; border: 1px solid var(--tg-theme-hint-color); border-radius: 8px; background: var(--tg-theme-secondary-bg-color); color: var(--tg-theme-text-color); }
+        button { width: 100%; padding: 12px; margin: 10px 0; background: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); border: none; border-radius: 8px; font-weight: bold; }
         .loading { text-align: center; padding: 40px; color: var(--tg-theme-hint-color); }
-        .status { padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; font-size: 14px; }
+        .status { padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; }
         .success { background: rgba(44, 171, 55, 0.1); color: #2cab37; }
-        .error { background: rgba(255, 107, 53, 0.1); color: #ff6b35; }
-        .sale-tag { background: #ff6b35; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-top: 4px; }
+        .getgems-btn { background: linear-gradient(45deg, #ff6b35, #f7931e); color: white; text-decoration: none; display: block; padding: 15px; border-radius: 12px; margin: 20px 0; font-weight: bold; text-align: center; }
+        .tonkeeper-btn { background: linear-gradient(45deg, #0088cc, #2cab37); color: white; text-decoration: none; display: block; padding: 12px; border-radius: 8px; margin: 10px 0; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body>
-    <h1>🎨 Мои NFT + GetGems</h1>
+    <h1>🎨 Мои NFT</h1>
     
-    <input type="text" id="wallet-input" class="wallet-input" placeholder="EQ... или UQ... (TON кошелёк)">
-    <button onclick="loadNFTs()">🔍 Все NFT (вкл. GetGems)</button>
+    <input type="text" id="wallet-input" class="wallet-input" placeholder="EQ... или UQ...">
+    <button onclick="loadNFTs()">🔍 Показать NFT кошелька</button>
     
     <div id="status" class="status"></div>
     <div id="nft-grid" class="nft-grid">
@@ -36,86 +36,74 @@
             const grid = document.getElementById('nft-grid');
             const status = document.getElementById('status');
             
-            status.className = 'status';
-            status.innerHTML = '';
-            grid.innerHTML = '<div class="loading">🔍 Сканируем GetGems + кошельки...</div>';
-
             if (!walletAddress.match(/^EQ[A-Za-z0-9_-]{44,}$/) && !walletAddress.match(/^UQ[A-Za-z0-9_-]{44,}$/)) {
-                status.className = 'status error';
                 status.innerHTML = '❌ Неверный TON адрес';
+                status.className = 'status error';
                 return;
             }
 
-            let allNFTs = [];
+            status.innerHTML = '🔄 Загрузка...';
+            status.className = 'status';
+            grid.innerHTML = '<div class="loading">⏳ Проверяем блокчейн...</div>';
 
-            // 1. GetGems NFT на продаже (ГЛАВНЫЙ)
             try {
-                status.innerHTML = '🛒 GetGems Marketplace...';
-                const getgemsUrl = `https://api.getgems.io/v1/nft/search/?owner=${walletAddress}&limit=100&includeSales=true`;
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(getgemsUrl)}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(
+                    `https://tonapi.io/v2/accounts/${walletAddress}/nfts?limit=100`
+                )}`;
+                
                 const response = await fetch(proxyUrl);
                 const proxyData = await response.json();
                 const data = JSON.parse(proxyData.contents);
-                
-                let getgemsNFTs = data.result || data.nfts || data.items || [];
-                allNFTs = allNFTs.concat(getgemsNFTs.map(nft => ({...nft, source: 'GetGems', sale: true})));
-                status.innerHTML += ` +${getgemsNFTs.length} на продаже`;
-            } catch(e) {
-                console.log('GetGems API недоступен');
-            }
 
-            // 2. Обычные NFT кошелька
-            try {
-                status.innerHTML += ' + кошельки...';
-                const tonapiUrl = `https://tonapi.io/v2/accounts/${walletAddress}/nfts?limit=100`;
-                const proxyUrl2 = `https://api.allorigins.win/get?url=${encodeURIComponent(tonapiUrl)}`;
-                const response2 = await fetch(proxyUrl2);
-                const proxyData2 = await response2.json();
-                const data2 = JSON.parse(proxyData2.contents);
-                
-                let walletNFTs = data2.nfts || [];
-                allNFTs = allNFTs.concat(walletNFTs.map(nft => ({...nft, source: 'Кошелёк', sale: false})));
-            } catch(e) {
-                console.log('TonAPI недоступен');
-            }
-
-            // Удаляем дубликаты
-            allNFTs = allNFTs.filter((nft, i, arr) => 
-                i === arr.findIndex(t => t.address === nft.address)
-            );
-
-            status.innerHTML = `✅ Всего: ${allNFTs.length} NFT (${allNFTs.filter(n=>n.sale).length} на GetGems)`;
-            status.className = 'status success';
-
-            if (allNFTs.length > 0) {
-                grid.innerHTML = '';
-                allNFTs.slice(0, 24).forEach((nft, i) => {
-                    const card = document.createElement('div');
-                    card.className = 'nft-card';
+                if (data.nfts && data.nfts.length > 0) {
+                    status.innerHTML = `✅ ${data.nfts.length} NFT в кошельке`;
+                    status.className = 'status success';
                     
-                    const name = nft.metadata?.name || nft.name || nft.collection?.name || `NFT #${i+1}`;
-                    const image = nft.metadata?.image || 
-                                 nft.metadata?.content?.image || 
-                                 nft.image || 
-                                 `https://via.placeholder.com/150x120/2cab37/ffffff?text=${i+1}`;
-                    
-                    card.innerHTML = `
-                        <img class="nft-image" src="${image}" alt="${name}" 
-                             onerror="this.src='https://via.placeholder.com/150x120/2cab37/ffffff?text=${i+1}'">
-                        <div style="font-size: 13px; margin-top: 6px;">${name}</div>
-                        ${nft.sale ? '<div class="sale-tag">🛒 НА ПРОДАЖЕ</div>' : ''}
-                        <div style="font-size: 11px; opacity: 0.7;">${nft.address?.slice(0,8)}...</div>
+                    grid.innerHTML = '';
+                    data.nfts.slice(0, 20).forEach((nft, i) => {
+                        const card = document.createElement('div');
+                        card.className = 'nft-card';
+                        const name = nft.metadata?.name || `NFT #${i+1}`;
+                        const image = nft.metadata?.image || `https://via.placeholder.com/150x120/2cab37/ffffff?text=${i+1}`;
+                        
+                        card.innerHTML = `
+                            <img class="nft-image" src="${image}" alt="${name}" onerror="this.src='https://via.placeholder.com/150x120/2cab37/ffffff?text=${i+1}'">
+                            <div style="font-size: 13px; margin-top: 6px;">${name}</div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                } else {
+                    status.innerHTML = '📱 В кошельке 0 NFT';
+                    grid.innerHTML = `
+                        <div style="text-align: center; padding: 30px;">
+                            <p style="font-size: 16px;">Ваши NFT на GetGems:</p>
+                            <a href="https://getgems.io/my/collection/${walletAddress}" target="_blank" class="getgems-btn">
+                                🛒 Открыть GetGems Marketplace
+                            </a>
+                            <a href="ton://transfer/${walletAddress}" class="tonkeeper-btn">
+                                📱 Открыть в Tonkeeper
+                            </a>
+                            <p style="font-size: 12px; opacity: 0.7; margin-top: 20px;">
+                                ${walletAddress.slice(0,12)}...${walletAddress.slice(-4)}
+                            </p>
+                        </div>
                     `;
-                    grid.appendChild(card);
-                });
-            } else {
-                grid.innerHTML = '<div class="loading">📭 NFT не найдены</div>';
+                }
+            } catch (error) {
+                grid.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <p>⚠️ Ошибка загрузки кошелька</p>
+                        <a href="https://getgems.io/my/collection/${walletAddress}" target="_blank" class="getgems-btn">
+                            🛒 Ваши NFT на GetGems
+                        </a>
+                    </div>
+                `;
             }
         }
 
         setTimeout(() => {
             document.getElementById('wallet-input').focus();
-            tg.MainButton.setText('🔍 Сканировать').show().onClick(loadNFTs);
+            tg.MainButton.setText('🔍 Проверить').show().onClick(loadNFTs);
         }, 500);
     </script>
 </body>
